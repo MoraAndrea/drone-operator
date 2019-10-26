@@ -9,6 +9,8 @@ spec:
     listKind: DroneFederatedDeploymentList
     plural: dronefederateddeployments
     singular: dronefederateddeployment
+    shortNames:
+    - dfd
   scope: Namespaced
   subresources:
     status: {}

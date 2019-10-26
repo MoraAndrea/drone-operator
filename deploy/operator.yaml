@@ -14,13 +14,26 @@ spec:
         name: drone-operator
     spec:
       serviceAccountName: drone-operator
+      # Add the ConfigMap as a volume to the Pod
+      volumes:
+        # `name` here must match the name specified in the volume mount
+          - name: drone-resources-configmap-volume
+          # Populate the volume with config map data
+          configMap:
+            # `name` here must match the name specified in the ConfigMap's YAML
+            name: drone-resources-configmap
       containers:
         - name: drone-operator
           # Replace this with the built image name
           image: drone-operator:first
           command:
           - drone-operator
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
+          tty: true # for format and color log
+          volumeMounts:
+            # `name` here must match the name from the volumes section of this pod
+              - name: drone-resources-configmap-volume
+                mountPath: /etc/config
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

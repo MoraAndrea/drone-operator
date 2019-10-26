@@ -1,10 +1,13 @@
 package messaging
 
 import (
+	"drone-operator/drone-operator/pkg/controller/common/configuration"
 	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 	"os"
 )
+
+var configurationEnv *configuration.ConfigType
 
 type RabbitMq struct {
 	conn    *amqp.Connection
@@ -38,26 +41,31 @@ func (confRabbit RabbitMq) Ch() *amqp.Channel {
 	return confRabbit.ch
 }
 
-func InitRabbitMq() *RabbitMq {
+func InitRabbitMq(conf *configuration.ConfigType) *RabbitMq {
 
+	// Set configuration
+	configurationEnv = conf
+
+	// New RabbitMq object
 	config := &RabbitMq{}
 
-	config.Connect()
+	config.Connect(configurationEnv.RabbitConf.BrokerAddress,configurationEnv.RabbitConf.BrokerPort, configurationEnv.RabbitConf.VirtualHost, configurationEnv.RabbitConf.Username, configurationEnv.RabbitConf.Password)
 
 	config.CreateChannel()
 
-	config.CreateExchange("drone-exchange",amqp.ExchangeDirect)
+	config.CreateExchange(configurationEnv.Federation.ExchangeName, amqp.ExchangeDirect)
 
-	config.CreateBindQueue("app-advertisement-ctrl","app-advertisement","drone-exchange")
+	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAdvertisementCtrl, configurationEnv.RabbitConf.QueueAdvertisement, configurationEnv.Federation.ExchangeName)
 
 	return config
 }
 
 // Connect to RabbitMq
-func (confRabbit *RabbitMq) Connect() {
+func (confRabbit *RabbitMq) Connect(brokerAddress string, brokerPort string, virtualHost string, username string, password string) {
 
 	//print("amqp://" + username + ":" + password + "@rabbitmq-service:5672/")
-	conn, err := amqp.Dial("amqp://drone:drone@rabbitmq-service:5672/")
+	//conn, err := amqp.Dial("amqp://drone:drone@rabbitmq-service:5672/")
+	conn, err := amqp.Dial("amqp://" + username + ":" + password + "@" + brokerAddress + ":" + brokerPort + "/" + virtualHost)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	confRabbit.SetConn(conn)
 	confRabbit.SetErr(err)
@@ -102,10 +110,10 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 	if local == true {
 		// default exchange, for local message
 		err := confRabbit.Ch().Publish(
-			"",                // exchange
-			dst, // routing key
-			false,             // mandatory
-			false,             // immediate
+			"",    // exchange
+			dst,   // routing key
+			false, // mandatory
+			false, // immediate
 			amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte(body),
@@ -115,10 +123,10 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 	} else {
 		// default exchange, for local message
 		err := confRabbit.Ch().Publish(
-			"drone-exchange",  // federate exchange
-			dst, // routing key
-			false,             // mandatory
-			false,             // immediate
+			configurationEnv.Federation.ExchangeName, // federate exchange
+			dst,              // routing key
+			false,            // mandatory
+			false,            // immediate
 			amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte(body),
@@ -129,9 +137,9 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 }
 
 // Consume messages on a queue
-func (confRabbit *RabbitMq) ConsumeMessage() {
+func (confRabbit *RabbitMq) ConsumeMessage(queueName string) {
 	msgs, err := confRabbit.Ch().Consume(
-		confRabbit.Q.Name, // queue
+		queueName, // queue
 		"",                // consumer
 		true,              // auto-ack
 		false,             // exclusive
@@ -141,12 +149,12 @@ func (confRabbit *RabbitMq) ConsumeMessage() {
 	)
 	failOnError(err, "Failed to register a consumer")
 
-	forever := make(chan bool)
+	//forever := make(chan bool)
 
 	go func() {
 		log.Printf("Consumer ready, PID: %d", os.Getpid())
 		for d := range msgs {
-			log.Printf("Received a message: %s", d.Body)
+			log.Printf(" %s: Received a message: %s",queueName, d.Body)
 
 			/*addTask := &gopher_and_rabbit.AddTask{}
 
@@ -165,8 +173,8 @@ func (confRabbit *RabbitMq) ConsumeMessage() {
 			}*/
 		}
 	}()
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
+	//log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	//<-forever
 }
 
 func failOnError(err error, msg string) {

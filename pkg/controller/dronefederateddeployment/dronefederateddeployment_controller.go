@@ -2,8 +2,10 @@ package dronefederateddeployment
 
 import (
 	"context"
+	"drone-operator/drone-operator/pkg/controller/common/configuration"
 	"drone-operator/drone-operator/pkg/controller/common/messaging"
 	"encoding/json"
+	appsv1 "k8s.io/api/apps/v1"
 	"time"
 
 	dronev1alpha1 "drone-operator/drone-operator/pkg/apis/drone/v1alpha1"
@@ -25,6 +27,10 @@ import (
 
 var log = logf.Log.WithName("controller_dronefederateddeployment")
 
+var configurationEnv *configuration.ConfigType
+
+var rabbit *messaging.RabbitMq
+
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
 * business logic.  Delete these comments after modifying this file.*
@@ -43,6 +49,13 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
+
+	// Load and create configurationEnv
+	configurationEnv = configuration.Config()
+	rabbit = messaging.InitRabbitMq(configurationEnv)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult)
+
 	// Create a new controller
 	c, err := controller.New("dronefederateddeployment-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -124,12 +137,6 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 			return reconcile.Result{}, err
 		}
 
-		// CHIAMARE DRONE..... DALLA SOLUZIONE CAPIRE COSA FARE
-		var rabbit = messaging.InitRabbitMq()
-		message := createAdvMessage(instance)
-		rabbit.PublishMessage(message, "app-advertisement", false)
-
-		// reqLogger.Info("Schedule parsing done", "Result", "diff", fmt.Sprintf("%v", d))
 		if d > 0 {
 			// Not yet time to execute the command, wait until the scheduled time
 			return reconcile.Result{RequeueAfter: d}, nil
@@ -138,9 +145,16 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 		instance.Status.Phase = dronev1alpha1.PhaseRunning
 	case dronev1alpha1.PhaseRunning:
 		reqLogger.Info("Phase: RUNNING")
+
+		// CHIAMARE DRONE..... DALLA SOLUZIONE CAPIRE COSA FARE
+		message := createAdvMessage(instance)
+		rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
+
 		pod := newPodForCR(instance)
+		deploy := newDeployForCR(instance)
+
 		// Set DroneService instance as the owner and controller
-		err := controllerutil.SetControllerReference(instance, pod, r.scheme)
+		err := controllerutil.SetControllerReference(instance, deploy, r.scheme)
 		if err != nil {
 			// requeue with error
 			return reconcile.Result{}, err
@@ -189,42 +203,6 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 	return reconcile.Result{}, nil
 }
 
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *dronev1alpha1.DroneFederatedDeployment) *corev1.Pod {
-
-	log.Info("New pod run.....")
-	labels := map[string]string{
-		"app": cr.Name,
-	}
-
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
-					Image:   cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
-					//Command: []string{"sleep", "3600"},
-				},
-			},
-		},
-	}
-}
-
-func timeUntilSchedule(schedule string) (time.Duration, error) {
-	now := time.Now().UTC()
-	layout := "2006-01-02T15:04:05Z"
-	s, err := time.Parse(layout, schedule)
-	if err != nil {
-		return time.Duration(0), err
-	}
-	return s.Sub(now), nil
-}
-
 /*
 func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string{
 
@@ -253,8 +231,6 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string{
 */
 
 func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string {
-	log.Info("sono qui")
-
 	var components []messaging.Component
 
 	for _, c := range cr.Spec.Template.Spec.Template.Spec.Containers {
@@ -271,7 +247,7 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string {
 	}
 
 	// Create new message
-	message := messaging.NewAdvertisementMessage(cr.Name, "cluster1", messaging.ADD, components)
+	message := messaging.NewAdvertisementMessage(cr.Name, configurationEnv.Kubernetes.ClusterName, messaging.ADD, components)
 	// log.Info(" Created Message %s", message)
 
 	jsonData, err := json.Marshal(message)
@@ -281,4 +257,81 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string {
 	// log.Info(" Json Message: ", string(jsonData))
 	return string(jsonData)
 	return string(jsonData)
+}
+
+// newPodForCR returns a busybox pod with the same name/namespace as the cr
+func newPodForCR(cr *dronev1alpha1.DroneFederatedDeployment) *corev1.Pod {
+
+	log.Info("New pod create.....")
+	labels := map[string]string{
+		"app": cr.Name,
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + "-pod",
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
+					Image: cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
+					//Command: []string{"sleep", "3600"},
+				},
+			},
+		},
+	}
+}
+
+// newDeployForCR returns a deploy with the same name/namespace as the cr
+func newDeployForCR(cr *dronev1alpha1.DroneFederatedDeployment) *appsv1.Deployment {
+
+	log.Info("New deploy create.....")
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cr.Name,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": cr.Spec.Template.Spec.Selector.MatchLabels["app"],
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": cr.Spec.Template.Spec.Template.Labels["app"],
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
+							Image: cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "http",
+									Protocol:      corev1.ProtocolTCP,
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func timeUntilSchedule(schedule string) (time.Duration, error) {
+	now := time.Now().UTC()
+	layout := "2006-01-02T15:04:05Z"
+	s, err := time.Parse(layout, schedule)
+	if err != nil {
+		return time.Duration(0), err
+	}
+	return s.Sub(now), nil
 }
