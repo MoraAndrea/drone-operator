@@ -5,6 +5,7 @@ import (
 	"drone-operator/drone-operator/pkg/controller/common/configuration"
 	"drone-operator/drone-operator/pkg/controller/common/messaging"
 	"encoding/json"
+	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	"time"
 
@@ -31,13 +32,7 @@ var configurationEnv *configuration.ConfigType
 
 var rabbit *messaging.RabbitMq
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new DroneFederatedDeployment Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
+// Add creates a new DroneFederatedDeployment Controller and adds it to the Manager. The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
@@ -53,8 +48,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Load and create configurationEnv
 	configurationEnv = configuration.Config()
 	rabbit = messaging.InitRabbitMq(configurationEnv)
-	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl)
-	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, printCallback)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, resultCallback)
 
 	// Create a new controller
 	c, err := controller.New("dronefederateddeployment-controller", mgr, controller.Options{Reconciler: r})
@@ -68,9 +63,35 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner DroneFederatedDeployment
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &dronev1alpha1.DroneFederatedDeployment{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Deployments and requeue the owner DroneFederatedDeployment
+	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &dronev1alpha1.DroneFederatedDeployment{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Services and requeue the owner DroneFederatedDeployment
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &dronev1alpha1.DroneFederatedDeployment{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Config-map and requeue the owner DroneFederatedDeployment
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &dronev1alpha1.DroneFederatedDeployment{},
 	})
@@ -86,16 +107,13 @@ var _ reconcile.Reconciler = &ReconcileDroneFederatedDeployment{}
 
 // ReconcileDroneFederatedDeployment reconciles a DroneFederatedDeployment object
 type ReconcileDroneFederatedDeployment struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
+	// This client, initialized using mgr.Client() above, is a split client that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a DroneFederatedDeployment object and makes changes based on the state read
 // and what is in the DroneFederatedDeployment.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -109,49 +127,39 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after
-			// reconcile request—return and don't requeue:
+			// Request object not found, could have been deleted after reconcile request—return and don't requeue:
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object—requeue the request:
 		return reconcile.Result{}, err
 	}
+
 	// If no phase set, default to pending (the initial phase):
 	if instance.Status.Phase == "" {
 		instance.Status.Phase = dronev1alpha1.PhasePending
 	}
-	// Now let's make the main case distinction: implementing
+
 	// the state diagram PENDING -> RUNNING -> DONE
 	switch instance.Status.Phase {
 	case dronev1alpha1.PhasePending:
 		reqLogger.Info("Phase: PENDING")
-		// As long as we haven't executed the command yet, we need to check if
-		// it's already time to act:
-		reqLogger.Info("Checking schedule", "Target", instance.Spec.Schedule)
-		// Check if it's already time to execute the command with a tolerance
-		// of 2 seconds:
-		d, err := timeUntilSchedule(instance.Spec.Schedule)
-		if err != nil {
-			reqLogger.Error(err, "Schedule parsing failure")
-			// Error reading the schedule. Wait until it is fixed.
-			return reconcile.Result{}, err
-		}
 
-		if d > 0 {
-			// Not yet time to execute the command, wait until the scheduled time
-			return reconcile.Result{RequeueAfter: d}, nil
-		}
 		reqLogger.Info("It's time to deploy!")
 		instance.Status.Phase = dronev1alpha1.PhaseRunning
 	case dronev1alpha1.PhaseRunning:
 		reqLogger.Info("Phase: RUNNING")
 
-		// CHIAMARE DRONE..... DALLA SOLUZIONE CAPIRE COSA FARE
+		// DRONE Agreement, send message Advertisement
 		message := createAdvMessage(instance)
 		rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
 
-		pod := newPodForCR(instance)
+		//pod := newPodForCR(instance)
 		deploy := newDeployForCR(instance)
+		jsonData, err1 := json.Marshal(deploy)
+		if err1 != nil {
+			log.Error(err1, "Error during marshal message...")
+		}
+		fmt.Println(string(jsonData))
 
 		// Set DroneService instance as the owner and controller
 		err := controllerutil.SetControllerReference(instance, deploy, r.scheme)
@@ -160,30 +168,29 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 			return reconcile.Result{}, err
 		}
 
-		// Check if this Pod already exists
-		found := &corev1.Pod{}
-		nsName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
-		err = r.client.Get(context.TODO(), nsName, found)
-		// Try to see if the pod already exists and if not
-		// (which we expect) then create a one-shot pod as per spec:
+		// Check if this Deploy already exists
+		foundDeploy := &appsv1.Deployment{}
+		nsName := types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}
+		err = r.client.Get(context.TODO(), nsName, foundDeploy)
+
+		// If not exists, then create it
 		if err != nil && errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), pod)
+			reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
+			err = r.client.Create(context.TODO(), deploy)
 			if err != nil {
 				// requeue with error
 				return reconcile.Result{}, err
 			}
 			// Pod created successfully - don't requeue
-			reqLogger.Info("Pod launched", "name", pod.Name)
+			reqLogger.Info("Deploy created", "name", deploy.Name)
+			time.Sleep(5 * time.Second)
+
+			instance.Status.Phase = dronev1alpha1.PhaseDone
 		} else if err != nil {
 			// requeue with error
 			return reconcile.Result{}, err
-		} else if found.Status.Phase == corev1.PodFailed ||
-			found.Status.Phase == corev1.PodSucceeded {
-			reqLogger.Info("Container terminated", "reason", found.Status.Reason, "message", found.Status.Message)
-			instance.Status.Phase = dronev1alpha1.PhaseDone
 		} else {
-			// Don't requeue because it will happen automatically when the
-			// pod status changes.
+			// Don't requeue because it will happen automatically when the pod status changes.
 			return reconcile.Result{}, nil
 		}
 	case dronev1alpha1.PhaseDone:
@@ -198,8 +205,7 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	// Don't requeue. We should be reconcile because either the pod
-	// or the CR changes.
+	// Don't requeue. We should be reconcile because either deploy or the CR changes.
 	return reconcile.Result{}, nil
 }
 
@@ -256,7 +262,6 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string {
 	}
 	// log.Info(" Json Message: ", string(jsonData))
 	return string(jsonData)
-	return string(jsonData)
 }
 
 // newPodForCR returns a busybox pod with the same name/namespace as the cr
@@ -278,7 +283,6 @@ func newPodForCR(cr *dronev1alpha1.DroneFederatedDeployment) *corev1.Pod {
 				{
 					Name:  cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
 					Image: cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
-					//Command: []string{"sleep", "3600"},
 				},
 			},
 		},
@@ -292,7 +296,8 @@ func newDeployForCR(cr *dronev1alpha1.DroneFederatedDeployment) *appsv1.Deployme
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name,
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -309,8 +314,9 @@ func newDeployForCR(cr *dronev1alpha1.DroneFederatedDeployment) *appsv1.Deployme
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
-							Image: cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
+							Name:      cr.Spec.Template.Spec.Template.Spec.Containers[0].Name,
+							Image:     cr.Spec.Template.Spec.Template.Spec.Containers[0].Image,
+							Resources: cr.Spec.Template.Spec.Template.Spec.Containers[0].Resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -334,4 +340,21 @@ func timeUntilSchedule(schedule string) (time.Duration, error) {
 		return time.Duration(0), err
 	}
 	return s.Sub(now), nil
+}
+
+func resultCallback(queueName string, body []byte){
+	log.Info(" %s: Received a message: %s",queueName, string(body))
+
+	result := &messaging.ResultMessage{}
+	err := json.Unmarshal(body, result)
+
+	log.Info(" SENDER: %s",result.Sender)
+	if err != nil {
+		log.Info(err.Error())
+	}
+	log.Info(" NAME: %s",result.LocalOffloading[0].Name)
+}
+
+func printCallback(queueName string, body []byte){
+	log.Info(" %s: Received a message: %s",queueName, string(body))
 }

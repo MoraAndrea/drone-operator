@@ -136,8 +136,11 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 	}
 }
 
+// consumeCallback types take queue name and body string
+type consumeCallback func(string, []byte)
+
 // Consume messages on a queue
-func (confRabbit *RabbitMq) ConsumeMessage(queueName string) {
+func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn consumeCallback) {
 	msgs, err := confRabbit.Ch().Consume(
 		queueName, // queue
 		"",                // consumer
@@ -154,7 +157,8 @@ func (confRabbit *RabbitMq) ConsumeMessage(queueName string) {
 	go func() {
 		log.Printf("Consumer ready, PID: %d", os.Getpid())
 		for d := range msgs {
-			log.Printf(" %s: Received a message: %s",queueName, d.Body)
+			//log.Printf(" %s: Received a message: %s",queueName, d.Body)
+			fn(queueName, d.Body)
 
 			/*addTask := &gopher_and_rabbit.AddTask{}
 
@@ -165,8 +169,8 @@ func (confRabbit *RabbitMq) ConsumeMessage(queueName string) {
 			}
 
 			log.Printf("Result of %d + %d is : %d", addTask.Number1, addTask.Number2, addTask.Number1+addTask.Number2)
-
-			if err := d.Ack(false); err != nil {
+*/
+			/*if err := d.Ack(false); err != nil {
 				log.Printf("Error acknowledging message : %s", err)
 			} else {
 				log.Printf("Acknowledged message")

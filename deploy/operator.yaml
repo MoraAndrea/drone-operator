@@ -19,9 +19,9 @@ spec:
         # `name` here must match the name specified in the volume mount
           - name: drone-resources-configmap-volume
           # Populate the volume with config map data
-          configMap:
-            # `name` here must match the name specified in the ConfigMap's YAML
-            name: drone-resources-configmap
+            configMap:
+              # `name` here must match the name specified in the ConfigMap's YAML
+              name: drone-resources-configmap
       containers:
         - name: drone-operator
           # Replace this with the built image name

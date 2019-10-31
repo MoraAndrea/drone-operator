@@ -2,16 +2,15 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="6fe9178c-704c-45e0-890f-ef44860627aa" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/buildLoadAndDeploy.sh" beforeDir="false" afterPath="$PROJECT_DIR$/buildLoadAndDeploy.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_cr.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_cr.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_crd.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_crd.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/deploy/operator.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/operator.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/add_dronefederateddeployment.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/add_dronefederateddeployment.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/config/config.ini" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/resources_messaging.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/resources_message.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -43,7 +42,7 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/controller/common/configuration" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/controller/common/messaging" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
@@ -51,8 +50,8 @@
       <recent name="$PROJECT_DIR$/pkg/controller/common/config" />
     </key>
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/pkg/controller/common/configuration" />
       <recent name="$PROJECT_DIR$/pkg/controller/common/messaging" />
+      <recent name="$PROJECT_DIR$/pkg/controller/common/configuration" />
       <recent name="$PROJECT_DIR$/pkg/controller/common" />
       <recent name="$PROJECT_DIR$/pkg/controller" />
     </key>
@@ -74,7 +73,7 @@
       <module name="drone-operator" />
       <working_directory value="$PROJECT_DIR$" />
       <envs>
-        <env name="WATCH_NAMESPACE" value="&quot;drone&quot;" />
+        <env name="WATCH_NAMESPACE" value="&quot;default&quot;" />
       </envs>
       <kind value="FILE" />
       <filePath value="$PROJECT_DIR$/cmd/manager/main.go" />
@@ -105,21 +104,5 @@
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
     <proxy>direct</proxy>
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go</url>
-          <line>153</line>
-          <option name="timeStamp" value="5" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
-          <url>file://$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go</url>
-          <line>149</line>
-          <option name="timeStamp" value="7" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
   </component>
 </project>

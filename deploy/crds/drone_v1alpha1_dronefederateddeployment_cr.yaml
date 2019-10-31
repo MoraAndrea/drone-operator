@@ -1,9 +1,9 @@
 apiVersion: drone.polito.com/v1alpha1
 kind: DroneFederatedDeployment
 metadata:
-  name: nginx-dronefederateddeployment
+  name: nginx-dronefederateddeployment1
 spec:
-  schedule: "2019-04-12T10:12:00Z"
+  schedule: "2019-10-28T10:12:00Z"
   template:
     metadata:
       labels:

@@ -39,6 +39,7 @@ func Config() *ConfigType{
 	c:= new(ConfigType)
 
 	filename, _ := filepath.Abs("pkg/controller/common/configuration/conf.yml")//("/etc/config/conf.yaml")
+	//filename, _ := filepath.Abs("/etc/config/conf.yaml")
 	yamlFile, err := ioutil.ReadFile(filename)
 	err = yaml.Unmarshal(yamlFile, &c)
 	if err != nil {

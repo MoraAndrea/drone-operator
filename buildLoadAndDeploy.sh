@@ -1,5 +1,5 @@
 echo "Build Application, Create docker..."
-go operator-sdk build drone-operator:first
+operator-sdk build drone-operator:first
 
 echo "Load image on kind..."
 kind load docker-image drone-operator:first --name cluster1
@@ -18,4 +18,4 @@ kubectl apply -f deploy/operator.yaml -n drone
 
 # Create an DroneFederatedDeployment CR
 # echo "Create ad DroneFederatedDeployment"
-# kubectl apply -f deploy/crds/app.example.com_v1alpha1_appservice_cr.yaml -n demo
+# kubectl apply -f deploy/crds/app.example.com_v1alpha1_appservice_cr.yaml -n drone

@@ -38,3 +38,13 @@ spec:
   - name: v1alpha1
     served: true
     storage: true
+  additionalPrinterColumns: #(optional)
+    - name: schedule
+      type: string
+      JSONPath: .spec.schedule
+    - name: phase
+      type: string
+      JSONPath: .status.phase
+    - name: placement
+      type: []string
+      JSONPath: .spec.placement.clusters
