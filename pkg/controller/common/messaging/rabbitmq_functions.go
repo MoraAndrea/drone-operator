@@ -137,10 +137,10 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 }
 
 // consumeCallback types take queue name and body string
-type consumeCallback func(string, []byte)
+type consumeCallback func(string, []byte )
 
 // Consume messages on a queue
-func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn consumeCallback) {
+func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn func(queueName string, body []byte) error) {
 	msgs, err := confRabbit.Ch().Consume(
 		queueName, // queue
 		"",                // consumer
@@ -158,23 +158,23 @@ func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn consumeCallback)
 		log.Printf("Consumer ready, PID: %d", os.Getpid())
 		for d := range msgs {
 			//log.Printf(" %s: Received a message: %s",queueName, d.Body)
-			fn(queueName, d.Body)
+			err := fn(queueName, d.Body)
 
 			/*addTask := &gopher_and_rabbit.AddTask{}
 
-			err := json.Unmarshal(d.Body, addTask)
+			err := json.Unmarshal(d.Body, addTask)*/
 
 			if err != nil {
 				log.Printf("Error decoding JSON: %s", err)
 			}
 
-			log.Printf("Result of %d + %d is : %d", addTask.Number1, addTask.Number2, addTask.Number1+addTask.Number2)
-*/
-			/*if err := d.Ack(false); err != nil {
+			//log.Printf("Result of %d + %d is : %d", addTask.Number1, addTask.Number2, addTask.Number1+addTask.Number2)
+
+			if err := d.Ack(false); err != nil {
 				log.Printf("Error acknowledging message : %s", err)
 			} else {
 				log.Printf("Acknowledged message")
-			}*/
+			}
 		}
 	}()
 	//log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

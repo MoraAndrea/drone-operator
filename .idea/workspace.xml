@@ -3,14 +3,10 @@
   <component name="ChangeListManager">
     <list default="true" id="6fe9178c-704c-45e0-890f-ef44860627aa" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/buildLoadAndDeploy.sh" beforeDir="false" afterPath="$PROJECT_DIR$/buildLoadAndDeploy.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_cr.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_cr.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_crd.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/crds/drone_v1alpha1_dronefederateddeployment_crd.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy/operator.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/operator.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/advertisement_message.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/advertisement_message.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/resources_messaging.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/resources_message.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/result_message.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/result_message.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -42,7 +38,7 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/controller/common/messaging" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../drone_daemon_resources" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
@@ -95,7 +91,9 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="COLUMN_ORDER" />
+            </State>
           </value>
         </entry>
       </map>

@@ -15,7 +15,7 @@ type AdvertisementMessage struct {
 	BaseNode   string    `json:"base_node"`
 	Type       string    `json:"type"`
 	Components []Component `json:"components"`
-	Timestamp  int64     `json:"timestamp"`
+	Timestamp  float64     `json:"timestamp"`
 }
 
 type Component struct {
@@ -38,7 +38,7 @@ type Resources struct {
 }
 
 func NewAdvertisementMessage(appName string, baseNode string, typeMes string, components []Component) *AdvertisementMessage {
-	message := AdvertisementMessage{appName, baseNode, typeMes,components,time.Now().Unix()}
+	message := AdvertisementMessage{appName, baseNode, typeMes,components,float64(time.Now().Unix())}
 	return &message
 }
 
@@ -57,3 +57,10 @@ func NewResources(memory float64, cpu float64) *Resources{
 	return &resources
 }
 
+// Check if two message are equals
+func (m *AdvertisementMessage) Equal(message AdvertisementMessage) bool{
+	if m.AppName==message.AppName && m.BaseNode==message.BaseNode {
+		return true
+	}
+	return false
+}

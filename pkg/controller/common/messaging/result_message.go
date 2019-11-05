@@ -10,7 +10,7 @@ type ResultMessage struct {
 type LocalOffloading struct {
 	Name     string         `json:"name"`
 	AppName  string         `json:"app_name"`
-	Function FunctionResult `json:"app_name"`
+	Function FunctionResult `json:"function"`
 }
 
 type OverallOffloading struct {

@@ -42,9 +42,9 @@ spec:
     - name: schedule
       type: string
       JSONPath: .spec.schedule
+    - name: creation
+      type: string
+      JSONPath: .metadata.creationTimestamp
     - name: phase
       type: string
       JSONPath: .status.phase
-    - name: placement
-      type: []string
-      JSONPath: .spec.placement.clusters
