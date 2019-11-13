@@ -8,7 +8,6 @@ import (
 	errorstandard "errors"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"time"
 
 	dronev1alpha1 "drone-operator/drone-operator/pkg/apis/drone/v1alpha1"
@@ -33,6 +32,14 @@ var configurationEnv *configuration.ConfigType
 var rabbit *messaging.RabbitMq
 
 var advMessages []messaging.AdvertisementMessage
+
+type RunningApp struct {
+	AppName       string
+	ComponentName string
+	Function      messaging.FunctionResult
+}
+
+var runningApps []RunningApp
 
 // Add creates a new DroneFederatedDeployment Controller and adds it to the Manager. The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -146,23 +153,30 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 
 	// If no phase set, default to pending (the initial phase):
 	if instance.Status.Phase == "" {
-		instance.Status.Phase = dronev1alpha1.PhasePending
+		instance.Status.Phase = dronev1alpha1.PhaseScheduling
 	}
 
 	// the state diagram PENDING -> RUNNING -> DONE
 	switch instance.Status.Phase {
-	case dronev1alpha1.PhasePending:
-		reqLogger.Info("Phase: PENDING")
+	case dronev1alpha1.PhaseScheduling:
+		reqLogger.Info(" Phase: SCHEDULING")
 
-		reqLogger.Info("It's time to Orchestrate!")
+		reqLogger.Info(" It's time to Orchestrate!")
 
 		// DRONE Agreement, send message Advertisement
 		message := createAdvMessage(instance, messaging.ADD)
 		rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
 
 		//instance.Status.Phase = dronev1alpha1.PhaseRunning
+	case dronev1alpha1.PhasePending:
+		reqLogger.Info(" Phase: PENDING")
+
+		reqLogger.Info(" Apps are starting up")
+
 	case dronev1alpha1.PhaseRunning:
 		reqLogger.Info("Phase: RUNNING")
+
+		reqLogger.Info(" All Apps Running")
 
 		/*err = r.deployContentCrd(instance, request.Name, request.Namespace)
 		if err != nil {
@@ -192,33 +206,6 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 	// Don't requeue. We should be reconcile because either deploy or the CR changes.
 	return reconcile.Result{}, nil
 }
-
-/*
-func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment) string{
-
-	var components []messaging.Component
-
-	for _, c := range cr.Spec.Components {
-		resources := messaging.NewResources(c.Function.Resources.Memory, c.Function.Resources.Cpu)
-
-		function := messaging.NewFunction(c.Function.Image, *resources)
-
-		component := messaging.NewComponent(c.Name, *function, nil, c.BootDependencies, c.NodesBlacklist, c.NodesWhitelist)
-		components = append(components, *component)
-	}
-
-	// Create new message
-	message := messaging.NewAdvertisementMessage(cr.Spec.AppName, cr.Spec.BaseNode, cr.Spec.Type, components)
-	log.Info(" Created Message %s", message)
-
-	jsonData, err := json.Marshal(message)
-	if err != nil {
-		log.Error(err, "Error during marshal message...")
-	}
-	log.Info(" Json Message: ", string(jsonData))
-	return string(jsonData)
-}
-*/
 
 func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage string) string {
 	var components []messaging.Component
@@ -327,10 +314,10 @@ func newDeployFromMessage(message *messaging.AdvertisementMessage) *appsv1.Deplo
 
 	log.Info("New deploy create.....")
 
-	res:=corev1.ResourceRequirements{}
-	res.Limits.Cpu().SetMilli(int64(message.Components[0].Function.Resources.Cpu*1000))
-	res.Limits.Memory().Set(int64(message.Components[0].Function.Resources.Cpu*1000))
-	res.Requests=nil
+	res := corev1.ResourceRequirements{}
+	res.Limits.Cpu().SetMilli(int64(message.Components[0].Function.Resources.Cpu * 1000))
+	res.Limits.Memory().Set(int64(message.Components[0].Function.Resources.Cpu * 1000))
+	res.Requests = nil
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -370,9 +357,9 @@ func newDeployFromMessage(message *messaging.AdvertisementMessage) *appsv1.Deplo
 	}
 }
 
-// Callbacks
-//
 // Callbacks for rabbitmq consume
+
+// Result Callback
 func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, body []byte) error {
 	log.Info(" [x] Received a message: ", queueName, string(body))
 
@@ -386,24 +373,96 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 	}
 	log.Info(" NAME LocalOffloading: " + result.LocalOffloading[0].AppName)
 
-	if result.Sender==configurationEnv.Kubernetes.ClusterName{
+	if result.Sender == configurationEnv.Kubernetes.ClusterName {
 		log.Info(" Cluster with cr, reconcile crd")
-		//DEPLOY NO UPDATE
-	} else {
-		log.Info(" Cluster without cr, simple deploy.")
+
+		//DEPLOY WITH UPDATE
+		// TODO: togliere quello che non c'è più
+
+		// Update instance state in PENDING (App are starting up)
+		err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhasePending)
+		if err != nil {
+			return err
+		}
+
+		// Check app already running
+		for _, item := range result.LocalOffloading {
+			app := RunningApp{AppName: item.AppName, ComponentName: item.Name, Function: item.Function}
+			presence, function := checkRunningApps(runningApps, app)
+			if presence == true {
+				// app already exist -> function is change?? if true change deploy
+				if function == true {
+					// update app deploy
+					err = r.updateContent(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+					if err != nil {
+						return err
+					}
+					// Change runningApps
+					runningApps=changeRunningAppsFunction(runningApps,app)
+				}
+			} else {
+				// app not exist -> add in runningApps deploy new
+
+				// Add app to running apps
+				runningApps = append(runningApps, app)
+				// Deploy new
+				err = r.deployContentAdv(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// TODO: MOVE IN CALLBACK
+		// Update instance state in RUNNING
 		err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
 		if err != nil {
 			return err
 		}
-		//DEPLOY WITH UPDATE
 
-		//deployContentAdv(findAdv(advMessages,result.LocalOffloading))
+	} else {
+		log.Info(" Cluster without cr, simple deploy.")
+
+		// DEPLOY NO UPDATE
+		// TODO: togliere quello che non c'è più
+
+		// Check app already running
+		for _, item := range result.LocalOffloading {
+			app := RunningApp{AppName: item.AppName, ComponentName: item.Name, Function: item.Function}
+			presence, function := checkRunningApps(runningApps, app)
+			if presence == true {
+				// app already exist -> function is change?? if true change deploy
+				if function == true {
+					// update app deploy
+					err = r.updateContent(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+					if err != nil {
+						return err
+					}
+					// Change runningApps
+					runningApps=changeRunningAppsFunction(runningApps,app)
+				}
+			} else {
+				// app not exist -> add in runningApps deploy new
+
+				// Add app to running apps
+				runningApps = append(runningApps, app)
+				// Deploy new
+				err = r.deployContentAdvNoCR(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+				if err != nil {
+					return err
+				}
+			}
+			// Notify that app is running, send message to
+			// TODO: queue per ogni cluster per ricevere ack da altri
+
+		}
+
 	}
-
 
 	return nil
 }
 
+// Advertisement Callback
 func (r *ReconcileDroneFederatedDeployment) advertisementCallback(queueName string, body []byte) error {
 	log.Info(" [x] Received a message: ", queueName, string(body))
 
@@ -428,6 +487,16 @@ func (r *ReconcileDroneFederatedDeployment) advertisementCallback(queueName stri
 	return nil
 }
 
+// TODO: da fare
+// Acknowledge Callback
+func (r *ReconcileDroneFederatedDeployment) acknowledgeCallback(queueName string, body []byte) error {
+	log.Info(" [x] Received a message: ", queueName, string(body))
+
+
+	return nil
+}
+
+// Print Callback
 func (r *ReconcileDroneFederatedDeployment) printCallback(queueName string, body []byte) {
 	log.Info(" %s: Received a message: %s", queueName, string(body))
 }
@@ -493,9 +562,9 @@ func (r *ReconcileDroneFederatedDeployment) finalizeCheckInstance(cr *dronev1alp
 	return nil
 }
 
-func (r *ReconcileDroneFederatedDeployment) deployContentAdv( adv messaging.AdvertisementMessage, namespace string) error {
-	log.Info(" DEPLOY: "+adv.AppName+" in "+namespace)
-	deploy:=newDeployFromMessage(&adv)
+func (r *ReconcileDroneFederatedDeployment) deployContentAdv(adv messaging.AdvertisementMessage, namespace string) error {
+	log.Info(" DEPLOY: " + adv.AppName + " in " + namespace)
+	deploy := newDeployFromMessage(&adv)
 
 	jsonData, err := json.Marshal(deploy)
 	if err != nil {
@@ -520,6 +589,7 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdv( adv messaging.Adve
 		log.Info("Deploy created", "name", deploy.Name)
 		time.Sleep(5 * time.Second)
 
+		// TODO: Spostare nella callback che riceve gli acks dagli altri cluster
 		//instance.Status.Phase = dronev1alpha1.PhaseDone
 		err = r.updateStatusInstance(adv.AppName, namespace, dronev1alpha1.PhaseDone)
 		if err != nil {
@@ -538,9 +608,9 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdv( adv messaging.Adve
 	return nil
 }
 
-func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR( adv messaging.AdvertisementMessage, namespace string) error {
-	log.Info(" DEPLOY: "+adv.AppName+" in "+namespace)
-	deploy:=newDeployFromMessage(&adv)
+func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR(adv messaging.AdvertisementMessage, namespace string) error {
+	log.Info(" DEPLOY: " + adv.AppName + " in " + namespace)
+	deploy := newDeployFromMessage(&adv)
 
 	jsonData, err := json.Marshal(deploy)
 	if err != nil {
@@ -572,9 +642,29 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR( adv messaging.
 	return nil
 }
 
+func (r *ReconcileDroneFederatedDeployment) updateContent(adv messaging.AdvertisementMessage, namespace string) error {
+	log.Info(" UPDATE DEPLOY: " + adv.AppName + " in " + namespace)
+	deploy := newDeployFromMessage(&adv)
 
-func (r *ReconcileDroneFederatedDeployment) deployContentCrd(cr *dronev1alpha1.DroneFederatedDeployment, name string, namespace string) error {
-	log.Info(" DEPLOY: "+cr.Name+" in "+cr.Namespace)
+	jsonData, err := json.Marshal(deploy)
+	if err != nil {
+		log.Error(err, "Error during marshal message...")
+	}
+	log.Info("[D] New update deploy: " + string(jsonData))
+
+	log.Info("Updating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
+	err = r.client.Update(context.TODO(), deploy)
+	if err != nil {
+		return err
+	}
+	log.Info("Deploy updated", "name", deploy.Name)
+	time.Sleep(5 * time.Second)
+
+	return nil
+}
+
+/*func (r *ReconcileDroneFederatedDeployment) deployContentCrd(cr *dronev1alpha1.DroneFederatedDeployment, name string, namespace string) error {
+	log.Info(" DEPLOY: " + cr.Name + " in " + cr.Namespace)
 
 	//pod := newPodForCR(instance)
 	deploy := newDeployForCR(cr)
@@ -624,7 +714,7 @@ func (r *ReconcileDroneFederatedDeployment) deployContentCrd(cr *dronev1alpha1.D
 	}
 
 	return nil
-}
+}*/
 
 func (r *ReconcileDroneFederatedDeployment) deleteExternalResources(cr *dronev1alpha1.DroneFederatedDeployment) error {
 	log.Info(" DELETE RESOURCE: " + cr.Name)
@@ -650,6 +740,7 @@ func containsString(slice []string, s string) bool {
 	}
 	return false
 }
+
 // Remove string from slide of strings
 func removeString(slice []string, s string) (result []string) {
 	for _, item := range slice {
@@ -662,7 +753,7 @@ func removeString(slice []string, s string) (result []string) {
 }
 
 // functions to add or remove message from adv slice.
-func addAdv(slice []messaging.AdvertisementMessage, s messaging.AdvertisementMessage) (result []messaging.AdvertisementMessage,e error) {
+func addAdv(slice []messaging.AdvertisementMessage, s messaging.AdvertisementMessage) (result []messaging.AdvertisementMessage, e error) {
 	for _, item := range slice {
 		if s.Equal(item) {
 			return advMessages, errorstandard.New("Message already present for app: " + s.AppName)
@@ -672,9 +763,9 @@ func addAdv(slice []messaging.AdvertisementMessage, s messaging.AdvertisementMes
 	return advMessages, nil
 }
 
-func findAdv(slice []messaging.AdvertisementMessage, appName string, nameComponent string) (result messaging.AdvertisementMessage) {
+func findAdv(slice []messaging.AdvertisementMessage, appName string) (result messaging.AdvertisementMessage) {
 	for _, item := range slice {
-		if item.AppName==appName && item.Components[0].Name==nameComponent {
+		if item.AppName == appName {
 			return item
 		}
 	}
@@ -689,6 +780,41 @@ func removeAdv(slice []messaging.AdvertisementMessage, s messaging.Advertisement
 		result = append(result, item)
 	}
 	return
+}
+
+// Check if app is already running: return (true, true) if slice contains app and function in equal
+func checkRunningApps(slice []RunningApp, app RunningApp) (bool, bool) {
+	for _, item := range slice {
+		if item.AppName == app.AppName && item.ComponentName == app.ComponentName && item.Function.FunctionEqual(app.Function) {
+			return true, true
+		}
+		if item.AppName == app.AppName && item.ComponentName == app.ComponentName && !item.Function.FunctionEqual(app.Function) {
+			return true, false
+		}
+	}
+	return false, false
+}
+
+// Change app already running
+func changeRunningAppsFunction(slice []RunningApp, app RunningApp) (result []RunningApp){
+	for _, item := range slice {
+		if item.AppName == app.AppName && item.ComponentName == app.ComponentName {
+			item.Function=app.Function
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+// Remove running app
+func removeRunningApps(slice []RunningApp, app RunningApp) (result []RunningApp){
+	for _, item := range slice {
+		if item.AppName == app.AppName && item.ComponentName == app.ComponentName && item.Function.FunctionEqual(app.Function) {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
 }
 
 //Utils

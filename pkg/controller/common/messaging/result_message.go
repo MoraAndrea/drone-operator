@@ -1,5 +1,7 @@
 package messaging
 
+import "reflect"
+
 type ResultMessage struct {
 	Sender            string            `json:"sender"`
 	LocalOffloading   []LocalOffloading `json:"local-offloading"`
@@ -29,4 +31,12 @@ type ResourcesResult struct {
 func NewResultMessage(sender string, localOffloading []LocalOffloading, overallOffloading OverallOffloading, timestamp float64) *ResultMessage {
 	message := ResultMessage{sender, localOffloading, overallOffloading, timestamp}
 	return &message
+}
+
+// Check if two function are equals
+func (m *FunctionResult) FunctionEqual(function FunctionResult) bool{
+	if reflect.DeepEqual(m, function){
+		return true
+	}
+	return false
 }
