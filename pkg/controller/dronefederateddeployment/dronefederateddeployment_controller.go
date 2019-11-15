@@ -215,7 +215,7 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage st
 		function := messaging.NewFunction(c.Image, *resources)
 
 		bootDependencies := make([]string, 0)
-		nodeBlacklist := make([]string, len(cr.Spec.Placement.Clusters))
+		nodeBlacklist := make([]string, len(cr.Spec.Placement.Clusters)-1)
 		// copy(nodeBlacklist,cr.Spec.Placement.Clusters)
 		for _, item := range cr.Spec.Placement.Clusters {
 			nodeBlacklist=append(nodeBlacklist, item.Name)

@@ -170,11 +170,11 @@ func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn func(queueName s
 
 			//log.Printf("Result of %d + %d is : %d", addTask.Number1, addTask.Number2, addTask.Number1+addTask.Number2)
 
-			if err := d.Ack(false); err != nil {
+			/*if err := d.Ack(false); err != nil {
 				log.Printf("Error acknowledging message : %s", err)
 			} else {
 				log.Printf("Acknowledged message")
-			}
+			}*/
 		}
 	}()
 	//log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
