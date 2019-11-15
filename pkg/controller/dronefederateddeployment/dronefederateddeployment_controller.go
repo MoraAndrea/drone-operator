@@ -123,9 +123,8 @@ func (r *ReconcileDroneFederatedDeployment) init() {
 	rabbit = messaging.InitRabbitMq(configurationEnv)
 
 	// Set consume queue
-	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, r.advertisementCallback)
-	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, r.resultCallback)
-
+	//rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, r.advertisementCallback)
+	//rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, r.resultCallback)
 }
 
 // Reconcile reads that state of the cluster for a DroneFederatedDeployment object and makes changes based on the state read
@@ -156,7 +155,7 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 		instance.Status.Phase = dronev1alpha1.PhaseScheduling
 	}
 
-	// the state diagram PENDING -> RUNNING -> DONE
+	// the state diagram SCHEDULING -> PENDING -> RUNNING -> DONE
 	switch instance.Status.Phase {
 	case dronev1alpha1.PhaseScheduling:
 		reqLogger.Info(" Phase: SCHEDULING")
@@ -167,7 +166,7 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 		message := createAdvMessage(instance, messaging.ADD)
 		rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
 
-		//instance.Status.Phase = dronev1alpha1.PhaseRunning
+		instance.Status.Phase = dronev1alpha1.PhasePending
 	case dronev1alpha1.PhasePending:
 		reqLogger.Info(" Phase: PENDING")
 
@@ -199,10 +198,10 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 	}
 
 	// Update the DroneService instance, setting the status to the respective phase:
-	//err = r.client.Status().Update(context.TODO(), instance)
-	//if err != nil {
-	//	return reconcile.Result{}, err
-	//}
+	err = r.client.Status().Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	// Don't requeue. We should be reconcile because either deploy or the CR changes.
 	return reconcile.Result{}, nil
 }
@@ -215,6 +214,7 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage st
 
 		function := messaging.NewFunction(c.Image, *resources)
 
+		// TODO: add node in blacklist
 		bootDependencies := make([]string, 0)
 		nodeBlacklist := make([]string, 0)
 		var nodeWhitelist []string
@@ -380,10 +380,10 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 		// TODO: togliere quello che non c'è più
 
 		// Update instance state in PENDING (App are starting up)
-		err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhasePending)
-		if err != nil {
-			return err
-		}
+		//err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhasePending)
+		//if err != nil {
+			//return err
+		//}
 
 		// Check app already running
 		for _, item := range result.LocalOffloading {

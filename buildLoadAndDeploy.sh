@@ -1,8 +1,10 @@
+CLUSTER_NAME="${CLUSTER_NAME}"
+
 echo "Build Application, Create docker..."
 operator-sdk build drone-operator:first
 
 echo "Load image on kind..."
-kind load docker-image drone-operator:first --name cluster1
+kind load docker-image drone-operator:first --name ${CLUSTER_NAME}
 
 echo "Apply operator and other utils..."
 # Setup Service Account
