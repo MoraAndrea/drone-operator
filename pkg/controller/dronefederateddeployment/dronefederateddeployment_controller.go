@@ -123,8 +123,8 @@ func (r *ReconcileDroneFederatedDeployment) init() {
 	rabbit = messaging.InitRabbitMq(configurationEnv)
 
 	// Set consume queue
-	//rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, r.advertisementCallback)
-	//rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, r.resultCallback)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, r.advertisementCallback)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, r.resultCallback)
 }
 
 // Reconcile reads that state of the cluster for a DroneFederatedDeployment object and makes changes based on the state read
@@ -214,9 +214,12 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage st
 
 		function := messaging.NewFunction(c.Image, *resources)
 
-		// TODO: add node in blacklist
 		bootDependencies := make([]string, 0)
-		nodeBlacklist := make([]string, 0)
+		nodeBlacklist := make([]string, len(cr.Spec.Placement.Clusters))
+		// copy(nodeBlacklist,cr.Spec.Placement.Clusters)
+		for _, item := range cr.Spec.Placement.Clusters {
+			nodeBlacklist=append(nodeBlacklist, item.Name)
+		}
 		var nodeWhitelist []string
 
 		component := messaging.NewComponent(c.Name, *function, nil, bootDependencies, nodeBlacklist, nodeWhitelist)
