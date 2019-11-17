@@ -49,13 +49,19 @@ func InitRabbitMq(conf *configuration.ConfigType) *RabbitMq {
 	// New RabbitMq object
 	config := &RabbitMq{}
 
-	config.Connect(configurationEnv.RabbitConf.BrokerAddress,configurationEnv.RabbitConf.BrokerPort, configurationEnv.RabbitConf.VirtualHost, configurationEnv.RabbitConf.Username, configurationEnv.RabbitConf.Password)
+	config.Connect(configurationEnv.RabbitConf.BrokerAddress, configurationEnv.RabbitConf.BrokerPort, configurationEnv.RabbitConf.VirtualHost, configurationEnv.RabbitConf.Username, configurationEnv.RabbitConf.Password)
 
 	config.CreateChannel()
 
 	config.CreateExchange(configurationEnv.Federation.ExchangeName, amqp.ExchangeDirect)
 
 	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAdvertisementCtrl, configurationEnv.RabbitConf.QueueAdvertisement, configurationEnv.Federation.ExchangeName)
+
+	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAdvertisementDrone, configurationEnv.RabbitConf.QueueAdvertisement, configurationEnv.Federation.ExchangeName)
+
+	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName, configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName, configurationEnv.Federation.ExchangeName)
+
+	config.DeclareQueue(configurationEnv.RabbitConf.QueueResult)
 
 	return config
 }
@@ -124,9 +130,9 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 		// default exchange, for local message
 		err := confRabbit.Ch().Publish(
 			configurationEnv.Federation.ExchangeName, // federate exchange
-			dst,              // routing key
-			false,            // mandatory
-			false,            // immediate
+			dst,                                      // routing key
+			false,                                    // mandatory
+			false,                                    // immediate
 			amqp.Publishing{
 				ContentType: "text/plain",
 				Body:        []byte(body),
@@ -137,18 +143,18 @@ func (confRabbit *RabbitMq) PublishMessage(message string, dst string, local boo
 }
 
 // consumeCallback types take queue name and body string
-type consumeCallback func(string, []byte )
+type consumeCallback func(string, []byte)
 
 // Consume messages on a queue
 func (confRabbit *RabbitMq) ConsumeMessage(queueName string, fn func(queueName string, body []byte) error) {
 	msgs, err := confRabbit.Ch().Consume(
 		queueName, // queue
-		"",                // consumer
-		true,              // auto-ack
-		false,             // exclusive
-		false,             // no-local
-		false,             // no-wait
-		nil,               // args
+		"",        // consumer
+		true,      // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
 	)
 	failOnError(err, "Failed to register a consumer")
 

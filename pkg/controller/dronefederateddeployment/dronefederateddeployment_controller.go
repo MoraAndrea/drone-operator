@@ -125,6 +125,7 @@ func (r *ReconcileDroneFederatedDeployment) init() {
 	// Set consume queue
 	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAdvertisementCtrl, r.advertisementCallback)
 	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueResult, r.resultCallback)
+	rabbit.ConsumeMessage(configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName, r.acknowledgeCallback)
 }
 
 // Reconcile reads that state of the cluster for a DroneFederatedDeployment object and makes changes based on the state read
@@ -218,7 +219,7 @@ func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage st
 		nodeBlacklist := make([]string, len(cr.Spec.Placement.Clusters)-1)
 		// copy(nodeBlacklist,cr.Spec.Placement.Clusters)
 		for _, item := range cr.Spec.Placement.Clusters {
-			nodeBlacklist=append(nodeBlacklist, item.Name)
+			nodeBlacklist = append(nodeBlacklist, item.Name)
 		}
 		var nodeWhitelist []string
 
@@ -376,7 +377,53 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 	}
 	log.Info(" NAME LocalOffloading: " + result.LocalOffloading[0].AppName)
 
-	if result.Sender == configurationEnv.Kubernetes.ClusterName {
+	// Check app already running
+	for _, item := range result.LocalOffloading {
+
+		if findAdv(advMessages, item.AppName).BaseNode == configurationEnv.Kubernetes.ClusterName {
+			log.Info(" Cluster with cr, reconcile crd")
+		}
+
+		// TODO: togliere quello che non c'è più
+
+
+		app := RunningApp{AppName: item.AppName, ComponentName: item.Name, Function: item.Function}
+		presence, function := checkRunningApps(runningApps, app)
+		if presence == true {
+			// app already exist -> function is change?? if true change deploy
+			if function == true {
+				// update app deploy
+				err = r.updateContent(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+				if err != nil {
+					return err
+				}
+				// Change runningApps
+				runningApps = changeRunningAppsFunction(runningApps, app)
+			}
+		} else {
+			// app not exist -> add in runningApps deploy new
+
+			// Add app to running apps
+			runningApps = append(runningApps, app)
+			// Deploy new
+			err = r.deployContentAdv(findAdv(advMessages, result.LocalOffloading[0].AppName), corev1.NamespaceDefault)
+			if err != nil {
+				return err
+			}
+		}
+		messageAck := messaging.NewAcknowledgeMessage(configurationEnv.Kubernetes.ClusterName,
+			findAdv(advMessages, item.AppName).BaseNode, messaging.ADD_ACK,
+			*messaging.NewComponentAck(item.Name, item.AppName, item.Function.Name, item.Function.Resources.Memory, item.Function.Resources.Cpu))
+		jsonData, err := json.Marshal(messageAck)
+		if err != nil {
+			log.Error(err, "Error during marshal message...")
+		}
+		rabbit.PublishMessage(string(jsonData), configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+findAdv(advMessages, item.AppName).BaseNode, false)
+	}
+
+
+	// TODO: controllare se si è padre o rimuovere tutto
+	/*if result.Sender == configurationEnv.Kubernetes.ClusterName {
 		log.Info(" Cluster with cr, reconcile crd")
 
 		//DEPLOY WITH UPDATE
@@ -385,7 +432,7 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 		// Update instance state in PENDING (App are starting up)
 		//err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhasePending)
 		//if err != nil {
-			//return err
+		//return err
 		//}
 
 		// Check app already running
@@ -401,7 +448,7 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 						return err
 					}
 					// Change runningApps
-					runningApps=changeRunningAppsFunction(runningApps,app)
+					runningApps = changeRunningAppsFunction(runningApps, app)
 				}
 			} else {
 				// app not exist -> add in runningApps deploy new
@@ -414,16 +461,24 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 					return err
 				}
 			}
-		}
+			messageAck := messaging.NewAcknowledgeMessage(configurationEnv.Kubernetes.ClusterName,
+				findAdv(advMessages, item.AppName).BaseNode, messaging.ADD_ACK,
+				*messaging.NewComponentAck(item.Name, item.AppName, item.Function.Name, item.Function.Resources.Memory, item.Function.Resources.Cpu))
+			jsonData, err := json.Marshal(messageAck)
+			if err != nil {
+				log.Error(err, "Error during marshal message...")
+			}
+			rabbit.PublishMessage(string(jsonData), configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+findAdv(advMessages, item.AppName).BaseNode, false)
+		}*/
 
 		// TODO: MOVE IN CALLBACK
 		// Update instance state in RUNNING
-		err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
+		/*err = r.updateStatusInstance(result.LocalOffloading[0].AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
 		if err != nil {
 			return err
-		}
+		}*/
 
-	} else {
+	/*} else {
 		log.Info(" Cluster without cr, simple deploy.")
 
 		// DEPLOY NO UPDATE
@@ -442,7 +497,7 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 						return err
 					}
 					// Change runningApps
-					runningApps=changeRunningAppsFunction(runningApps,app)
+					runningApps = changeRunningAppsFunction(runningApps, app)
 				}
 			} else {
 				// app not exist -> add in runningApps deploy new
@@ -457,10 +512,17 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 			}
 			// Notify that app is running, send message to
 			// TODO: queue per ogni cluster per ricevere ack da altri
-
+			messageAck := messaging.NewAcknowledgeMessage(configurationEnv.Kubernetes.ClusterName,
+				findAdv(advMessages, item.AppName).BaseNode, messaging.ADD_ACK,
+				*messaging.NewComponentAck(item.Name, item.AppName, item.Function.Name, item.Function.Resources.Memory, item.Function.Resources.Cpu))
+			jsonData, err := json.Marshal(messageAck)
+			if err != nil {
+				log.Error(err, "Error during marshal message...")
+			}
+			rabbit.PublishMessage(string(jsonData), configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+findAdv(advMessages, item.AppName).BaseNode, false)
 		}
 
-	}
+	}*/
 
 	return nil
 }
@@ -486,15 +548,30 @@ func (r *ReconcileDroneFederatedDeployment) advertisementCallback(queueName stri
 	if adv.Type == messaging.DELETE {
 		log.Info(" DELETE: " + adv.AppName)
 		advMessages = removeAdv(advMessages, *adv)
+		// TODO: eliminare deploy
 	}
 	return nil
 }
 
-// TODO: da fare
+// TODO: da finire
 // Acknowledge Callback
 func (r *ReconcileDroneFederatedDeployment) acknowledgeCallback(queueName string, body []byte) error {
 	log.Info(" [x] Received a message: ", queueName, string(body))
 
+	ack := &messaging.AcknowledgeMessage{}
+	err := json.Unmarshal(body, ack)
+	log.Info(" Send ACK message from " + ack.BaseNode + " for app " + ack.Component.AppName+ " - " + ack.Component.Name)
+	if err != nil {
+		log.Error(err, "Error during unmarshal adv message...")
+		return err
+	}
+
+	// TODO: attendere tutti gli ack per un app
+	// Update instance state in RUNNING
+	err = r.updateStatusInstance(ack.Component.AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -528,27 +605,27 @@ func (r *ReconcileDroneFederatedDeployment) updateStatusInstance(name string, na
 }
 
 func (r *ReconcileDroneFederatedDeployment) finalizeCheckInstance(cr *dronev1alpha1.DroneFederatedDeployment) error {
-	log.Info(" Check finalize in: " + cr.Name)
+	log.Info(" [!] Check finalize in: " + cr.Name)
 	// name of our custom finalizer
 	myFinalizerName := "finalizers.drone.com"
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if cr.ObjectMeta.DeletionTimestamp.IsZero() {
-		log.Info("DELETION-TIMESTAMP is ZERO")
+		log.Info(" DELETION-TIMESTAMP is ZERO")
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent registering our finalizer.
 		if !containsString(cr.ObjectMeta.Finalizers, myFinalizerName) {
-			log.Info("Set drone finalizer")
+			log.Info(" --> Set drone finalizer")
 			cr.ObjectMeta.Finalizers = append(cr.ObjectMeta.Finalizers, myFinalizerName)
 			if err := r.client.Update(context.TODO(), cr); err != nil {
 				return err
 			}
 		}
 	} else {
-		log.Info("DELETION-TIMESTAMP not ZERO")
+		log.Info(" DELETION-TIMESTAMP not ZERO")
 		// The object is being deleted
 		if containsString(cr.ObjectMeta.Finalizers, myFinalizerName) {
-			log.Info("CONTAINS OUR FINALIZER")
+			log.Info(" --> Contains our finaliser")
 			// our finalizer is present, so lets handle any external dependency
 			if err := r.deleteExternalResources(cr); err != nil {
 				// if fail to delete the external dependency here, return with error so that it can be retried
@@ -573,7 +650,7 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdv(adv messaging.Adver
 	if err != nil {
 		log.Error(err, "Error during marshal message...")
 	}
-	log.Info("[D] deploy: " + string(jsonData))
+	log.Info(" [D] deploy: " + string(jsonData))
 
 	// Check if this Deploy already exists
 	foundDeploy := &appsv1.Deployment{}
@@ -582,23 +659,23 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdv(adv messaging.Adver
 
 	// If not exists, then create it
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
+		log.Info(" Creating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
 		err = r.client.Create(context.TODO(), deploy)
 		if err != nil {
 			// requeue with error
 			return err
 		}
 		// Pod created successfully - don't requeue
-		log.Info("Deploy created", "name", deploy.Name)
+		log.Info(" Deploy created", "name", deploy.Name)
 		time.Sleep(5 * time.Second)
 
 		// TODO: Spostare nella callback che riceve gli acks dagli altri cluster
 		//instance.Status.Phase = dronev1alpha1.PhaseDone
-		err = r.updateStatusInstance(adv.AppName, namespace, dronev1alpha1.PhaseDone)
-		if err != nil {
+		//err = r.updateStatusInstance(adv.AppName, namespace, dronev1alpha1.PhaseDone)
+		//if err != nil {
 			// requeue with error
-			return err
-		}
+			//return err
+		//}
 
 	} else if err != nil {
 		// requeue with error
@@ -611,15 +688,16 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdv(adv messaging.Adver
 	return nil
 }
 
+/*
 func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR(adv messaging.AdvertisementMessage, namespace string) error {
 	log.Info(" DEPLOY: " + adv.AppName + " in " + namespace)
 	deploy := newDeployFromMessage(&adv)
 
 	jsonData, err := json.Marshal(deploy)
 	if err != nil {
-		log.Error(err, "Error during marshal message...")
+		log.Error(err, " Error during marshal message...")
 	}
-	log.Info("[D] deploy: " + string(jsonData))
+	log.Info(" [D] deploy: " + string(jsonData))
 
 	// Check if this Deploy already exists
 	foundDeploy := &appsv1.Deployment{}
@@ -628,12 +706,12 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR(adv messaging.A
 
 	// If not exists, then create it
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
+		log.Info(" Creating a new Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
 		err = r.client.Create(context.TODO(), deploy)
 		if err != nil {
 			return err
 		}
-		log.Info("Deploy created", "name", deploy.Name)
+		log.Info(" Deploy created", "name", deploy.Name)
 		time.Sleep(5 * time.Second)
 
 	} else if err != nil {
@@ -644,6 +722,7 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR(adv messaging.A
 
 	return nil
 }
+*/
 
 func (r *ReconcileDroneFederatedDeployment) updateContent(adv messaging.AdvertisementMessage, namespace string) error {
 	log.Info(" UPDATE DEPLOY: " + adv.AppName + " in " + namespace)
@@ -759,7 +838,7 @@ func removeString(slice []string, s string) (result []string) {
 func addAdv(slice []messaging.AdvertisementMessage, s messaging.AdvertisementMessage) (result []messaging.AdvertisementMessage, e error) {
 	for _, item := range slice {
 		if s.Equal(item) {
-			return advMessages, errorstandard.New("Message already present for app: " + s.AppName)
+			return advMessages, errorstandard.New(" Message already present for app: " + s.AppName)
 		}
 	}
 	advMessages = append(advMessages, s)
@@ -799,10 +878,10 @@ func checkRunningApps(slice []RunningApp, app RunningApp) (bool, bool) {
 }
 
 // Change app already running
-func changeRunningAppsFunction(slice []RunningApp, app RunningApp) (result []RunningApp){
+func changeRunningAppsFunction(slice []RunningApp, app RunningApp) (result []RunningApp) {
 	for _, item := range slice {
 		if item.AppName == app.AppName && item.ComponentName == app.ComponentName {
-			item.Function=app.Function
+			item.Function = app.Function
 		}
 		result = append(result, item)
 	}
@@ -810,7 +889,7 @@ func changeRunningAppsFunction(slice []RunningApp, app RunningApp) (result []Run
 }
 
 // Remove running app
-func removeRunningApps(slice []RunningApp, app RunningApp) (result []RunningApp){
+func removeRunningApps(slice []RunningApp, app RunningApp) (result []RunningApp) {
 	for _, item := range slice {
 		if item.AppName == app.AppName && item.ComponentName == app.ComponentName && item.Function.FunctionEqual(app.Function) {
 			continue

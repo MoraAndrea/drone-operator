@@ -19,6 +19,7 @@ type ConfigType struct {
 		QueueResult string `yaml:"queue_result"`
 		QueueAdvertisementCtrl string `yaml:"queue_adv_ctrl"`
 		QueueAdvertisementDrone string `yaml:"queue_adv_drone"`
+		QueueAcknowledgeDeploy string `yaml:"queue_ack_deploy"`
 	} `yaml:"rabbit"`
 	Federation struct {
 		ExchangeName string `yaml:"exchange_name"`

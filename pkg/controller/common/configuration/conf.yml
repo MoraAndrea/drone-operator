@@ -11,6 +11,7 @@ rabbit:
   queue_result: "offloading-solution"
   queue_adv_ctrl: "app-advertisement-ctrl"
   queue_adv_drone: "app-advertisement-drone"
+  queue_ack_deploy: "ack-deploy"
 
 # Parameters for RabbitMQ federation
 federation:

@@ -2,6 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="6fe9178c-704c-45e0-890f-ef44860627aa" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config-map.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config-map.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -33,18 +38,18 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../drone_daemon_resources" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/controller/common/messaging" />
   </component>
   <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/controller/common/configuration" />
+      <recent name="$PROJECT_DIR$/pkg/controller/common/config" />
+    </key>
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/controller/common/messaging" />
       <recent name="$PROJECT_DIR$/pkg/controller/common/configuration" />
       <recent name="$PROJECT_DIR$/pkg/controller/common" />
       <recent name="$PROJECT_DIR$/pkg/controller" />
-    </key>
-    <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/pkg/controller/common/configuration" />
-      <recent name="$PROJECT_DIR$/pkg/controller/common/config" />
     </key>
   </component>
   <component name="RunDashboard">
