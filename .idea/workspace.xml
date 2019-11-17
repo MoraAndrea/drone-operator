@@ -3,10 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="6fe9178c-704c-45e0-890f-ef44860627aa" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config-map.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config-map.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/configuration/conf.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/common/messaging/rabbitmq_functions.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/dronefederateddeployment/dronefederateddeployment_controller.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -70,6 +66,7 @@
       <working_directory value="$PROJECT_DIR$" />
       <envs>
         <env name="WATCH_NAMESPACE" value="&quot;default&quot;" />
+        <env name="OPERATOR_NAME" value="&quot;drone-operator&quot;" />
       </envs>
       <kind value="FILE" />
       <filePath value="$PROJECT_DIR$/cmd/manager/main.go" />
