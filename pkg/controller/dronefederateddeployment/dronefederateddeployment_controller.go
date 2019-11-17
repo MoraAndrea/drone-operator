@@ -208,6 +208,9 @@ func (r *ReconcileDroneFederatedDeployment) Reconcile(request reconcile.Request)
 	return reconcile.Result{}, nil
 }
 
+/* Function for manage */
+
+// Create Advertisement message
 func createAdvMessage(cr *dronev1alpha1.DroneFederatedDeployment, typeMessage string) string {
 	var components []messaging.Component
 
@@ -317,7 +320,7 @@ func newDeployForCR(cr *dronev1alpha1.DroneFederatedDeployment) *appsv1.Deployme
 // newDeploy returns a deploy
 func newDeployFromMessage(message *messaging.AdvertisementMessage) *appsv1.Deployment {
 
-	log.Info("New deploy create.....")
+	log.Info(" Deploy create.....")
 
 	res := corev1.ResourceRequirements{}
 	res.Limits.Cpu().SetMilli(int64(message.Components[0].Function.Resources.Cpu * 1000))
@@ -362,7 +365,19 @@ func newDeployFromMessage(message *messaging.AdvertisementMessage) *appsv1.Deplo
 	}
 }
 
-// Callbacks for rabbitmq consume
+// Delete external resource, send message for delete
+func (r *ReconcileDroneFederatedDeployment) deleteExternalResources(cr *dronev1alpha1.DroneFederatedDeployment) error {
+	log.Info(" DELETE RESOURCE: " + cr.Name)
+	// delete any external resources associated with the DroneFederatedDeployment
+	// Ensure that delete implementation is idempotent and safe to invoke multiple types for same object.
+
+	// Send message DELETING
+	message := createAdvMessage(cr, messaging.DELETE)
+	rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
+	return nil
+}
+
+/* Callbacks for rabbitMQ consume */
 
 // Advertisement Callback
 func (r *ReconcileDroneFederatedDeployment) advertisementCallback(queueName string, body []byte) error {
@@ -386,6 +401,10 @@ func (r *ReconcileDroneFederatedDeployment) advertisementCallback(queueName stri
 		log.Info(" DELETE: " + adv.AppName)
 		advMessages = removeAdv(advMessages, *adv)
 		// TODO: eliminare deploy
+		err = r.deleteContent(*adv, corev1.NamespaceDefault)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -566,10 +585,31 @@ func (r *ReconcileDroneFederatedDeployment) acknowledgeCallback(queueName string
 	}
 
 	// TODO: attendere tutti gli ack per un app
-	// Update instance state in RUNNING
-	err = r.updateStatusInstance(ack.Component.AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
-	if err != nil {
-		return err
+	if ack.TypeAck == messaging.ADD_ACK {
+		log.Info(" ADD ACK: " + ack.Component.AppName)
+		// Update instance state in RUNNING
+		err = r.updateStatusInstance(ack.Component.AppName, corev1.NamespaceDefault, dronev1alpha1.PhaseRunning)
+		if err != nil {
+			return err
+		}
+	}
+	if ack.TypeAck == messaging.DELETE_ACK {
+		log.Info(" DELETE ACK: " + ack.Component.AppName)
+		namespacedName := types.NamespacedName{Name: ack.Component.AppName, Namespace: corev1.NamespaceDefault}
+
+		// Fetch the DroneFederatedDeployment instance
+		instance := &dronev1alpha1.DroneFederatedDeployment{}
+		err := r.client.Get(context.TODO(), namespacedName, instance)
+		if err != nil {
+			log.Error(err, " ERROR GET instance "+ack.Component.AppName)
+			return err
+		}
+		// remove our finalizer from the list and update it.
+		instance.ObjectMeta.Finalizers = removeString(instance.ObjectMeta.Finalizers, "finalizers.drone.com")
+		if err := r.client.Update(context.TODO(), instance); err != nil {
+			return err
+		}
+
 	}
 
 	return nil
@@ -580,9 +620,9 @@ func (r *ReconcileDroneFederatedDeployment) printCallback(queueName string, body
 	log.Info(" %s: Received a message: %s", queueName, string(body))
 }
 
-// K8S
-//
-// Function for manage K8S
+/* K8S */
+
+// Update CR status
 func (r *ReconcileDroneFederatedDeployment) updateStatusInstance(name string, namespace string, phase string) error {
 	log.Info(" UPDATE DRONE-FEDERATED: " + name + " --> phase: " + phase)
 	namespacedName := types.NamespacedName{Name: name, Namespace: namespace}
@@ -603,6 +643,7 @@ func (r *ReconcileDroneFederatedDeployment) updateStatusInstance(name string, na
 	return nil
 }
 
+// Check and update finalizer
 func (r *ReconcileDroneFederatedDeployment) finalizeCheckInstance(cr *dronev1alpha1.DroneFederatedDeployment) error {
 	log.Info(" [!] Check finalize in: " + cr.Name)
 	// name of our custom finalizer
@@ -632,15 +673,16 @@ func (r *ReconcileDroneFederatedDeployment) finalizeCheckInstance(cr *dronev1alp
 			}
 
 			// remove our finalizer from the list and update it.
-			cr.ObjectMeta.Finalizers = removeString(cr.ObjectMeta.Finalizers, myFinalizerName)
+			/*cr.ObjectMeta.Finalizers = removeString(cr.ObjectMeta.Finalizers, myFinalizerName)
 			if err := r.client.Update(context.TODO(), cr); err != nil {
 				return err
-			}
+			}*/
 		}
 	}
 	return nil
 }
 
+// Deploy job
 func (r *ReconcileDroneFederatedDeployment) deployContentAdv(adv messaging.AdvertisementMessage, namespace string) error {
 	log.Info(" DEPLOY: " + adv.AppName + " in " + namespace)
 	deploy := newDeployFromMessage(&adv)
@@ -723,6 +765,7 @@ func (r *ReconcileDroneFederatedDeployment) deployContentAdvNoCR(adv messaging.A
 }
 */
 
+// Update job
 func (r *ReconcileDroneFederatedDeployment) updateContent(adv messaging.AdvertisementMessage, namespace string) error {
 	log.Info(" UPDATE DEPLOY: " + adv.AppName + " in " + namespace)
 	deploy := newDeployFromMessage(&adv)
@@ -740,6 +783,36 @@ func (r *ReconcileDroneFederatedDeployment) updateContent(adv messaging.Advertis
 	}
 	log.Info("Deploy updated", "name", deploy.Name)
 	time.Sleep(5 * time.Second)
+
+	return nil
+}
+
+// Delete job
+func (r *ReconcileDroneFederatedDeployment) deleteContent(adv messaging.AdvertisementMessage, namespace string) error {
+	log.Info(" DELETE DEPLOY: " + adv.AppName + " in " + namespace)
+	deploy := newDeployFromMessage(&adv)
+
+	jsonData, err := json.Marshal(deploy)
+	if err != nil {
+		log.Error(err, "Error during marshal message...")
+	}
+	log.Info(" [D] Delete deploy: " + string(jsonData))
+
+	log.Info(" Deleting a Deployment", "Deployment.Namespace", deploy.Namespace, "Deployment.Name", deploy.Name)
+	err = r.client.Delete(context.TODO(), deploy)
+	if err != nil {
+		return err
+	}
+	log.Info(" Deploy deleted", "name", deploy.Name)
+
+	messageAck := messaging.NewAcknowledgeMessage(configurationEnv.Kubernetes.ClusterName,
+		adv.BaseNode, messaging.DELETE_ACK,
+		*messaging.NewComponentAck(adv.Components[0].Name, adv.AppName, adv.Components[0].Function.Image, adv.Components[0].Function.Resources.Memory, adv.Components[0].Function.Resources.Cpu))
+	jsonData, err = json.Marshal(messageAck)
+	if err != nil {
+		log.Error(err, "Error during marshal message...")
+	}
+	rabbit.PublishMessage(string(jsonData), configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+adv.BaseNode, false)
 
 	return nil
 }
@@ -797,18 +870,7 @@ func (r *ReconcileDroneFederatedDeployment) updateContent(adv messaging.Advertis
 	return nil
 }*/
 
-func (r *ReconcileDroneFederatedDeployment) deleteExternalResources(cr *dronev1alpha1.DroneFederatedDeployment) error {
-	log.Info(" DELETE RESOURCE: " + cr.Name)
-	// delete any external resources associated with the DroneFederatedDeployment
-	// Ensure that delete implementation is idempotent and safe to invoke multiple types for same object.
-
-	// Send message DELETING
-	message := createAdvMessage(cr, messaging.DELETE)
-	rabbit.PublishMessage(message, configurationEnv.RabbitConf.QueueAdvertisement, false)
-	return nil
-}
-
-// Helpers
+/* Helpers */
 
 // Check string from slide of strings
 func containsString(slice []string, s string) bool {
@@ -898,7 +960,7 @@ func removeRunningApps(slice []RunningApp, app RunningApp) (result []RunningApp)
 	return result
 }
 
-//Utils
+/* Utils */
 
 func timeUntilSchedule(schedule string) (time.Duration, error) {
 	now := time.Now().UTC()

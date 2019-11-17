@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	ADD_ACK      string = "ADD"
-	DELETE_ACK   string = "DEL"
-	MODIFIED_ACK string = "MOD"
+	ADD_ACK      string = "ADD_ACK"
+	DELETE_ACK   string = "DEL_ACK"
+	MODIFIED_ACK string = "MOD_ACK"
 )
 
 type AcknowledgeMessage struct {
