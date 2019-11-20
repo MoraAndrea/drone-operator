@@ -120,7 +120,10 @@ type ReconcileDroneFederatedDeployment struct {
 func (r *ReconcileDroneFederatedDeployment) init() {
 
 	// Load and create configurationEnv
+	log.Info("READ CONFIGURATION")
 	configurationEnv = configuration.Config()
+	log.Info("DEBUG: "+configurationEnv.RabbitConf.QueueAdvertisementCtrl)
+	log.Info("INIT RABBITMQ")
 	rabbit = messaging.InitRabbitMq(configurationEnv)
 
 	// Set consume queue
@@ -430,7 +433,7 @@ func (r *ReconcileDroneFederatedDeployment) resultCallback(queueName string, bod
 			log.Info(" Cluster with cr, reconcile crd")
 		}
 
-		// TODO: togliere quello che non c'è più
+		// TODO: togliere quello che non c'è più nella soluzione (dipende dal messaggio di soluzione)
 
 		app := RunningApp{AppName: item.AppName, ComponentName: item.Name, Function: item.Function}
 		presence, function := checkRunningApps(runningApps, app)

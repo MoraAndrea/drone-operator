@@ -1,10 +1,16 @@
 CLUSTER_NAME="${CLUSTER_NAME}"
 
-echo "Build Application, Create docker..."
-operator-sdk build drone-operator:first
+# echo "Build Application, Create docker..."
+# operator-sdk build drone-operator:first
 
-echo "Load image on kind..."
-kind load docker-image drone-operator:first --name ${CLUSTER_NAME}
+# echo "Load image on kind..."
+# kind load docker-image drone-operator:first --name ${CLUSTER_NAME}
+
+echo "Apply config map..,"
+echo "Edit config for CLUSTER_NAME"
+sed -i 's/{NAME}/'"$CLUSTER_NAME"'/g' config-map.yml
+kubectl apply -f config-map.yml -n drone
+sed -i 's/'"$CLUSTER_NAME"'/{NAME}/g' config-map.yml
 
 echo "Apply operator and other utils..."
 # Setup Service Account

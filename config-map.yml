@@ -31,7 +31,7 @@ data:
     # Parameter for Kubernetes
     kubernetes:
       namespace: "demo"
-      cluster_name: "cluster1"
+      cluster_name: {NAME}
 
     # Parameter folders
     folder:

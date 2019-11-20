@@ -42,6 +42,7 @@ func (confRabbit RabbitMq) Ch() *amqp.Channel {
 }
 
 func InitRabbitMq(conf *configuration.ConfigType) *RabbitMq {
+	log.Printf(" [RABBIT] Init ")
 
 	// Set configuration
 	configurationEnv = conf
@@ -49,18 +50,24 @@ func InitRabbitMq(conf *configuration.ConfigType) *RabbitMq {
 	// New RabbitMq object
 	config := &RabbitMq{}
 
+	log.Printf(" [RABBIT] connect to "+ configurationEnv.RabbitConf.BrokerAddress)
 	config.Connect(configurationEnv.RabbitConf.BrokerAddress, configurationEnv.RabbitConf.BrokerPort, configurationEnv.RabbitConf.VirtualHost, configurationEnv.RabbitConf.Username, configurationEnv.RabbitConf.Password)
 
 	config.CreateChannel()
 
+	log.Printf(" [RABBIT] create exchange "+ configurationEnv.Federation.ExchangeName)
 	config.CreateExchange(configurationEnv.Federation.ExchangeName, amqp.ExchangeDirect)
 
+	log.Printf(" [RABBIT] create and bind queue "+ configurationEnv.RabbitConf.QueueAdvertisementCtrl)
 	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAdvertisementCtrl, configurationEnv.RabbitConf.QueueAdvertisement, configurationEnv.Federation.ExchangeName)
 
+	log.Printf(" [RABBIT] create and bind queue "+ configurationEnv.RabbitConf.QueueAdvertisementDrone)
 	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAdvertisementDrone, configurationEnv.RabbitConf.QueueAdvertisement, configurationEnv.Federation.ExchangeName)
 
+	log.Printf(" [RABBIT] create and bind queue "+ configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName)
 	config.CreateBindQueue(configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName, configurationEnv.RabbitConf.QueueAcknowledgeDeploy+"-"+configurationEnv.Kubernetes.ClusterName, configurationEnv.Federation.ExchangeName)
 
+	log.Printf(" [RABBIT] create queue "+ configurationEnv.RabbitConf.QueueResult)
 	config.DeclareQueue(configurationEnv.RabbitConf.QueueResult)
 
 	return config
